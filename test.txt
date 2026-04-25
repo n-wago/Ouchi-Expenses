@@ -1,1 +1,5 @@
 //testfile
+
+ライブラリ
+easyocr: 文字認識の本体です。
+opencv-python: 画像の読み込みや加工をサポートするライブラリです。
