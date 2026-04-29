@@ -44,3 +44,5 @@ data/
 
 # easyocr models (large files, cached)
 .easyocr/
+
+.test_receipts/
