@@ -76,6 +76,16 @@
                         </tbody>
                     </table>
                 </div>
+                
+                <!-- 確認ボタン -->
+                <div class="mt-4 d-flex gap-2">
+                    <a href="{{ url_for('receipt_confirm') }}" class="btn btn-success btn-lg">
+                        <i class="bi bi-check-circle"></i> 確認・編集
+                    </a>
+                    <button type="button" class="btn btn-secondary btn-lg" id="resetBtn">
+                        <i class="bi bi-arrow-counterclockwise"></i> やり直す
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -198,6 +208,14 @@ document.getElementById('receiptForm').addEventListener('submit', async function
     } finally {
         document.getElementById('submitBtn').disabled = false;
     }
+});
+
+// リセットボタン
+document.getElementById('resetBtn').addEventListener('click', function() {
+    document.getElementById('receiptForm').reset();
+    document.getElementById('resultContainer').style.display = 'none';
+    document.getElementById('previewContainer').style.display = 'none';
+    document.getElementById('imageFile').value = '';
 });
 </script>
 {% endblock %}

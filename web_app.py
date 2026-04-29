@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session as flask_session
 from werkzeug.utils import secure_filename
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import os
+import json
 from pathlib import Path
 
-from models import init_db, engine, Stock, StockPrediction
+from models import init_db, engine, Stock, StockPrediction, Receipt, ReceiptItem
 from services import (
     get_receipt_service,
     get_stock_service,
     get_prediction_service,
+    get_ocr_service,
+    get_parsing_service,
 )
 
 # Flask アプリ初期化
@@ -80,25 +83,141 @@ def receipt():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], timestamp + filename)
         file.save(filepath)
         
-        # レシート処理
-        session = Session()
+        # OCR + パーシング処理（DB反映なし）
         try:
-            receipt_service = get_receipt_service(session)
-            receipt, items = receipt_service.process_receipt(filepath, store_name)
+            ocr_service = get_ocr_service()
+            parsing_service = get_parsing_service()
+            
+            # OCR実行
+            ocr_text, ocr_results = ocr_service.extract_text(filepath)
+            
+            # パーシング実行
+            items, raw_text = parsing_service.parse_receipt_detailed(ocr_results)
+            
+            # セッションに一時保存
+            flask_session['receipt_data'] = {
+                'filepath': filepath,
+                'store_name': store_name,
+                'ocr_text': ocr_text,
+                'items': items,
+                'created_at': datetime.now().isoformat()
+            }
+            
+            return jsonify({
+                'success': True,
+                'items_count': len(items),
+                'items': items,
+                'message': f'✅ OCR処理完了 ({len(items)}個の品目を抽出)'
+            })
+        except Exception as e:
+            return jsonify({'error': f'エラー: {str(e)}'}), 500
+    
+    return render_template('receipt.html')
+
+
+@app.route('/receipt/confirm', methods=['GET', 'POST'])
+def receipt_confirm():
+    """レシート内容確認・編集ページ"""
+    if not flask_session.get('receipt_data'):
+        return redirect(url_for('receipt'))
+    
+    if request.method == 'POST':
+        receipt_data = flask_session.get('receipt_data')
+        store_name = request.form.get('store_name', receipt_data.get('store_name', ''))
+        
+        # 編集されたアイテムを取得
+        items = []
+        item_count = int(request.form.get('item_count', 0))
+        
+        for i in range(item_count):
+            item_name = request.form.get(f'item_name_{i}')
+            quantity = request.form.get(f'quantity_{i}')
+            price = request.form.get(f'price_{i}')
+            category = request.form.get(f'category_{i}')
+            skip = request.form.get(f'skip_{i}')
+            
+            # スキップされたアイテムは除外
+            if skip:
+                continue
+            
+            try:
+                quantity = float(quantity) if quantity else 1.0
+                price = float(price) if price else None
+            except ValueError:
+                continue
+            
+            if item_name:
+                items.append({
+                    'item_name': item_name,
+                    'quantity': quantity,
+                    'price': price,
+                    'category': category
+                })
+        
+        # DBに反映
+        db_session = Session()
+        try:
+            # レシート情報を作成
+            receipt = Receipt(
+                date=datetime.now(),
+                store_name=store_name,
+                image_path=receipt_data['filepath'],
+                ocr_text=receipt_data['ocr_text']
+            )
+            db_session.add(receipt)
+            db_session.flush()
+            
+            # 品目を追加
+            stock_service = get_stock_service(db_session)
+            prediction_service = get_prediction_service(db_session)
+            
+            for item_info in items:
+                # ReceiptItemレコード作成
+                receipt_item = ReceiptItem(
+                    receipt_id=receipt.id,
+                    item_name=item_info['item_name'],
+                    quantity=item_info['quantity'],
+                    price=item_info['price'],
+                    category=item_info['category']
+                )
+                db_session.add(receipt_item)
+                
+                # 在庫に追加
+                stock = stock_service.add_or_update_stock(
+                    item_name=item_info['item_name'],
+                    quantity=item_info['quantity'],
+                    category=item_info['category']
+                )
+                
+                # 予測を更新
+                prediction_service.predict_depletion(stock.id)
+            
+            db_session.commit()
+            
+            # セッションをクリア
+            flask_session.pop('receipt_data', None)
             
             return jsonify({
                 'success': True,
                 'receipt_id': receipt.id,
                 'items_count': len(items),
-                'items': items,
-                'message': f'✅ レシート処理完了 (ID: {receipt.id})'
+                'message': f'✅ レシート完全に記録されました (ID: {receipt.id})'
             })
+        
         except Exception as e:
+            db_session.rollback()
             return jsonify({'error': f'エラー: {str(e)}'}), 500
         finally:
-            session.close()
+            db_session.close()
     
-    return render_template('receipt.html')
+    # GET時は確認画面を表示
+    receipt_data = flask_session.get('receipt_data', {})
+    items = receipt_data.get('items', [])
+    store_name = receipt_data.get('store_name', '')
+    
+    return render_template('receipt_confirm.html', 
+                         items=items, 
+                         store_name=store_name)
 
 
 @app.route('/stock')

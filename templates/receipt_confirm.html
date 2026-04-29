@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}レシート確認・編集 - OUCHI-EXPENSES{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="mb-4">
+            <h2 class="mb-0">
+                <i class="bi bi-pencil-square"></i> レシート内容確認・編集
+            </h2>
+            <p class="text-muted">品目の情報を確認・編集してください</p>
+        </div>
+
+        <form id="confirmForm" method="POST">
+            <!-- 店名セクション -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-building"></i> 店舗情報
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="storeName" class="form-label">店名</label>
+                        <input type="text" class="form-control form-control-lg" id="storeName" 
+                               name="store_name" value="{{ store_name }}" placeholder="例: セーフウェイ">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 品目編集セクション -->
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-check"></i> 品目編集 ({{ items|length }}個)
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="itemsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 5%">削除</th>
+                                    <th style="width: 30%">品目名</th>
+                                    <th style="width: 15%">数量</th>
+                                    <th style="width: 15%">価格</th>
+                                    <th style="width: 20%">カテゴリ</th>
+                                    <th style="width: 15%">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="itemsBody">
+                                {% for item in items %}
+                                <tr class="item-row" data-item-index="{{ loop.index0 }}">
+                                    <td>
+                                        <input type="checkbox" class="form-check-input skip-checkbox" 
+                                               name="skip_{{ loop.index0 }}" value="1">
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control item-name" 
+                                               name="item_name_{{ loop.index0 }}" 
+                                               value="{{ item.item_name }}" required>
+                                    </td>
+                                    <td>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control item-quantity" 
+                                                   name="quantity_{{ loop.index0 }}" 
+                                                   value="{{ "%.1f"|format(item.quantity) }}" 
+                                                   min="0.1" step="0.1" required>
+                                            <span class="input-group-text">個</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="input-group">
+                                            <span class="input-group-text">¥</span>
+                                            <input type="number" class="form-control item-price" 
+                                                   name="price_{{ loop.index0 }}" 
+                                                   value="{{ int(item.price) if item.price else '' }}" 
+                                                   min="0" step="1">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <select class="form-select item-category" 
+                                                name="category_{{ loop.index0 }}">
+                                            <option value="食品" {% if item.category == '食品' %}selected{% endif %}>食品</option>
+                                            <option value="日用雑貨" {% if item.category == '日用雑貨' %}selected{% endif %}>日用雑貨</option>
+                                            <option value="医薬品" {% if item.category == '医薬品' %}selected{% endif %}>医薬品</option>
+                                            <option value="洗剤" {% if item.category == '洗剤' %}selected{% endif %}>洗剤</option>
+                                            <option value="衛生用品" {% if item.category == '衛生用品' %}selected{% endif %}>衛生用品</option>
+                                            <option value="その他" {% if item.category == 'その他' %}selected{% endif %}>その他</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-danger delete-row-btn">
+                                            <i class="bi bi-trash"></i> 削除
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- アイテムカウントを隠す -->
+                    <input type="hidden" name="item_count" id="itemCount" value="{{ items|length }}">
+                </div>
+
+                <div class="card-footer bg-light">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i> 
+                        削除チェックをつけた品目は反映されません。
+                    </small>
+                </div>
+            </div>
+
+            <!-- ボタングループ -->
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-success btn-lg flex-grow-1">
+                    <i class="bi bi-check-circle"></i> 確定して保存
+                </button>
+                <a href="{{ url_for('receipt') }}" class="btn btn-secondary btn-lg">
+                    <i class="bi bi-arrow-left"></i> キャンセル
+                </a>
+            </div>
+        </form>
+
+        <!-- ローディング -->
+        <div id="loadingSpinner" class="text-center mt-5" style="display:none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">処理中...</span>
+            </div>
+            <p class="mt-2">保存中...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 削除行ボタン
+document.querySelectorAll('.delete-row-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const row = this.closest('.item-row');
+        row.style.opacity = '0.5';
+        row.querySelector('.skip-checkbox').checked = true;
+        this.disabled = true;
+        this.textContent = '削除予定';
+        this.classList.remove('btn-outline-danger');
+        this.classList.add('btn-danger');
+    });
+});
+
+// スキップチェックボックス
+document.querySelectorAll('.skip-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        const row = this.closest('.item-row');
+        if (this.checked) {
+            row.style.opacity = '0.5';
+        } else {
+            row.style.opacity = '1';
+        }
+    });
+});
+
+// フォーム送信
+document.getElementById('confirmForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    // 実際のアイテム数を計算
+    const itemCount = document.querySelectorAll('.item-row').length;
+    document.getElementById('itemCount').value = itemCount;
+    
+    const formData = new FormData(this);
+    
+    document.getElementById('loadingSpinner').style.display = 'block';
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+
+    try {
+        const response = await fetch('{{ url_for("receipt_confirm") }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // 成功メッセージ表示
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-success alert-dismissible fade show';
+            alert.innerHTML = `
+                <i class="bi bi-check-circle"></i> ${data.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+            
+            // 2秒後にホームにリダイレクト
+            setTimeout(() => {
+                window.location.href = '{{ url_for("index") }}';
+            }, 2000);
+        } else {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show';
+            alert.innerHTML = `
+                <i class="bi bi-exclamation-circle"></i> エラー: ${data.error}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+        }
+    } catch (error) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger alert-dismissible fade show';
+        alert.innerHTML = `
+            <i class="bi bi-exclamation-circle"></i> 処理エラー: ${error.message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+    } finally {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        submitBtn.disabled = false;
+    }
+});
+</script>
+{% endblock %}
