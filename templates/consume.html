@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}消費記録 - OUCHI-EXPENSES{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <h2 class="mb-4">
+            <i class="bi bi-pencil-square"></i> 消費記録
+        </h2>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                {% if stocks %}
+                    <form id="consumeForm">
+                        <div class="mb-3">
+                            <label for="itemSelect" class="form-label">
+                                <strong>品目を選択</strong>
+                                <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select form-select-lg" id="itemSelect" name="item_name" required>
+                                <option value="">-- 選択してください --</option>
+                                {% for stock in stocks %}
+                                    <option value="{{ stock.item_name }}">
+                                        {{ stock.item_name }} (在庫: {{ "%.1f"|format(stock.quantity) }} {{ stock.unit }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="quantityInput" class="form-label">
+                                <strong>消費数量</strong>
+                                <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <input type="number" class="form-control" id="quantityInput" 
+                                       name="quantity" min="0.1" step="0.1" required 
+                                       placeholder="例: 0.5">
+                                <span class="input-group-text" id="unitDisplay">個</span>
+                            </div>
+                            <small class="form-text text-muted">
+                                小数点で部分消費に対応しています
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notesInput" class="form-label">メモ（オプション）</label>
+                            <textarea class="form-control" id="notesInput" name="notes" rows="2" 
+                                      placeholder="例: 朝食用、子どもの分など"></textarea>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn">
+                                <i class="bi bi-check-circle"></i> 記録
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- ローディング表示 -->
+                    <div id="loadingSpinner" class="text-center mt-3" style="display:none;">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">処理中...</span>
+                        </div>
+                        <p class="mt-2">記録中...</p>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning" role="alert">
+                        <i class="bi bi-exclamation-triangle"></i> 在庫がありません。
+                        まずレシートを処理してください。
+                    </div>
+                    <a href="{{ url_for('receipt') }}" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-camera"></i> レシートを追加
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 処理結果 -->
+        <div id="resultContainer" style="display:none;" class="mt-4">
+            <div id="resultAlert" class="alert" role="alert"></div>
+        </div>
+
+        <!-- 消費パターン情報 -->
+        {% if stocks %}
+            <div class="mt-5">
+                <h3 class="mb-3">消費パターン</h3>
+                <div class="accordion" id="patternsAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                    data-bs-target="#pattern1">
+                                <i class="bi bi-question-circle"></i> よくある消費パターン
+                            </button>
+                        </h2>
+                        <div id="pattern1" class="accordion-collapse collapse" data-bs-parent="#patternsAccordion">
+                            <div class="accordion-body">
+                                <ul>
+                                    <li><strong>牛乳</strong>: 1本 = 1.0、半分飲んだ = 0.5</li>
+                                    <li><strong>食パン</strong>: 1切れ = 0.2、半分のスライス = 0.1</li>
+                                    <li><strong>卵</strong>: 1個 = 1.0、複数個は個数を入力</li>
+                                    <li><strong>トイレットペーパー</strong>: 1ロール = 1.0</li>
+                                    <li><strong>シャンプー</strong>: 使用量が不明な場合は = 0.1</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                    data-bs-target="#pattern2">
+                                <i class="bi bi-question-circle"></i> 小数点入力について
+                            </button>
+                        </h2>
+                        <div id="pattern2" class="accordion-collapse collapse" data-bs-parent="#patternsAccordion">
+                            <div class="accordion-body">
+                                <p>本アプリは小数点入力に対応しており、部分的な消費をトラッキングできます。</p>
+                                <div class="bg-light p-3 rounded">
+                                    <p><strong>例:</strong></p>
+                                    <ul>
+                                        <li>牛乳を半分飲んだ: 0.5</li>
+                                        <li>食パン3/4消費: 0.75</li>
+                                        <li>完全消費: 1.0</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 品目選択時にユニットを更新
+document.getElementById('itemSelect').addEventListener('change', function() {
+    const selectedText = this.options[this.selectedIndex].text;
+    const stocks = {{ stocks|tojson }};
+    const stock = stocks.find(s => s.item_name === this.value);
+    if (stock) {
+        document.getElementById('unitDisplay').textContent = stock.unit;
+    }
+});
+
+// フォーム送信
+document.getElementById('consumeForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const itemName = document.getElementById('itemSelect').value;
+    const quantity = parseFloat(document.getElementById('quantityInput').value);
+
+    if (!itemName || quantity <= 0) {
+        alert('品目と数量を正しく入力してください');
+        return;
+    }
+
+    const formData = new FormData(this);
+    
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('submitBtn').disabled = true;
+
+    try {
+        const response = await fetch('{{ url_for("consume") }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+        
+        document.getElementById('loadingSpinner').style.display = 'none';
+        document.getElementById('resultContainer').style.display = 'block';
+
+        if (data.success) {
+            const alert = document.getElementById('resultAlert');
+            alert.className = 'alert alert-success alert-dismissible fade show';
+            alert.innerHTML = `
+                <i class="bi bi-check-circle"></i> ${data.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            // フォームをリセット
+            document.getElementById('consumeForm').reset();
+        } else {
+            const alert = document.getElementById('resultAlert');
+            alert.className = 'alert alert-danger alert-dismissible fade show';
+            alert.innerHTML = `
+                <i class="bi bi-exclamation-circle"></i> エラー: ${data.error}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+        }
+    } catch (error) {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        const alert = document.getElementById('resultAlert');
+        alert.className = 'alert alert-danger alert-dismissible fade show';
+        alert.innerHTML = `
+            <i class="bi bi-exclamation-circle"></i> 処理エラー: ${error.message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.getElementById('resultContainer').style.display = 'block';
+    } finally {
+        document.getElementById('submitBtn').disabled = false;
+    }
+});
+</script>
+{% endblock %}

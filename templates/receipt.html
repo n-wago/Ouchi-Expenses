@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}レシート処理 - OUCHI-EXPENSES{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <h2 class="mb-4">
+            <i class="bi bi-camera"></i> レシート処理
+        </h2>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form id="receiptForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="imageFile" class="form-label">
+                            <strong>レシート画像</strong>
+                            <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="file" class="form-control" id="imageFile" name="file" 
+                                   accept="image/jpeg,image/png,image/gif,image/bmp" required>
+                            <button class="btn btn-outline-secondary" type="button" id="previewBtn">
+                                プレビュー
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">
+                            JPG、PNG、GIF、BMP (最大16MB)
+                        </small>
+                    </div>
+
+                    <!-- 画像プレビュー -->
+                    <div id="previewContainer" class="mb-3" style="display:none;">
+                        <img id="previewImage" src="" alt="プレビュー" class="img-fluid rounded" 
+                             style="max-height: 300px;">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="storeName" class="form-label">店名（オプション）</label>
+                        <input type="text" class="form-control" id="storeName" name="store_name" 
+                               placeholder="例: セーフウェイ、ダイソー">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="submitBtn">
+                        <i class="bi bi-cloud-upload"></i> レシートを処理
+                    </button>
+                </form>
+
+                <!-- ローディング表示 -->
+                <div id="loadingSpinner" class="text-center mt-3" style="display:none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">処理中...</span>
+                    </div>
+                    <p class="mt-2">OCR処理中... (数秒かかる場合があります)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 処理結果 -->
+        <div id="resultContainer" style="display:none;" class="mt-4">
+            <div id="resultAlert" class="alert" role="alert"></div>
+            
+            <div id="successResult">
+                <h3 class="mt-4 mb-3">抽出された品目</h3>
+                <div class="table-responsive">
+                    <table class="table table-striped" id="resultTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>品目名</th>
+                                <th>数量</th>
+                                <th>価格</th>
+                                <th>カテゴリ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 最近処理したレシート -->
+        <div class="mt-5">
+            <h3 class="mb-3">処理方法</h3>
+            <div class="accordion" id="helpAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#help1">
+                            <i class="bi bi-question-circle"></i> レシート画像の撮影のコツ
+                        </button>
+                    </h2>
+                    <div id="help1" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                        <div class="accordion-body">
+                            <ul>
+                                <li>照明がレシート上に当たるようにしてください</li>
+                                <li>レシート全体が画面に収まるようにしてください</li>
+                                <li>レシートを平らな面に置いて撮影すると精度が向上します</li>
+                                <li>スキャナーで取り込むと最も精度が高くなります</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#help2">
+                            <i class="bi bi-question-circle"></i> OCR処理が上手くいかない場合
+                        </button>
+                    </h2>
+                    <div id="help2" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                        <div class="accordion-body">
+                            <ul>
+                                <li>画像の解像度を上げてください（300dpi以上推奨）</li>
+                                <li>画像が傾いていないか確認してください</li>
+                                <li>レシートのテキストが鮮明に映っているか確認してください</li>
+                                <li>複数回トライしてみてください</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('previewBtn').addEventListener('click', function() {
+    const fileInput = document.getElementById('imageFile');
+    if (fileInput.files && fileInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('previewImage').src = e.target.result;
+            document.getElementById('previewContainer').style.display = 'block';
+        };
+        reader.readAsDataURL(fileInput.files[0]);
+    }
+});
+
+document.getElementById('receiptForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('imageFile');
+    if (!fileInput.files[0]) {
+        alert('ファイルを選択してください');
+        return;
+    }
+
+    const formData = new FormData(this);
+    
+    // ローディング表示
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('submitBtn').disabled = true;
+
+    try {
+        const response = await fetch('{{ url_for("receipt") }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        document.getElementById('loadingSpinner').style.display = 'none';
+        document.getElementById('resultContainer').style.display = 'block';
+
+        if (data.success) {
+            const alert = document.getElementById('resultAlert');
+            alert.className = 'alert alert-success';
+            alert.innerHTML = `<i class="bi bi-check-circle"></i> ${data.message}`;
+
+            // テーブルを更新
+            const tbody = document.getElementById('resultBody');
+            tbody.innerHTML = '';
+            data.items.forEach((item, index) => {
+                const price = item.price ? `¥${item.price}` : 'N/A';
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${item.item_name}</td>
+                        <td>${item.quantity.toFixed(1)}</td>
+                        <td>${price}</td>
+                        <td><span class="badge bg-primary">${item.category}</span></td>
+                    </tr>
+                `;
+            });
+        } else {
+            const alert = document.getElementById('resultAlert');
+            alert.className = 'alert alert-danger';
+            alert.innerHTML = `<i class="bi bi-exclamation-circle"></i> エラー: ${data.error}`;
+        }
+    } catch (error) {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        const alert = document.getElementById('resultAlert');
+        alert.className = 'alert alert-danger';
+        alert.innerHTML = `<i class="bi bi-exclamation-circle"></i> 処理エラー: ${error.message}`;
+        document.getElementById('resultContainer').style.display = 'block';
+    } finally {
+        document.getElementById('submitBtn').disabled = false;
+    }
+});
+</script>
+{% endblock %}

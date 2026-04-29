@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}購入提案 - OUCHI-EXPENSES{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-cart-check"></i> 購入提案
+        </h2>
+
+        {% if recommendations %}
+            <!-- 購入スケジュールビュー -->
+            <div class="mb-4">
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="viewType" id="viewCard" value="card" checked>
+                    <label class="btn btn-outline-primary" for="viewCard">
+                        <i class="bi bi-card-heading"></i> カード表示
+                    </label>
+                    
+                    <input type="radio" class="btn-check" name="viewType" id="viewTable" value="table">
+                    <label class="btn btn-outline-primary" for="viewTable">
+                        <i class="bi bi-table"></i> 表示
+                    </label>
+                </div>
+            </div>
+
+            <!-- カード表示 -->
+            <div id="cardView">
+                <div class="row">
+                    {% for rec in recommendations %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100 border-left-danger">
+                                <div class="card-header">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h5 class="card-title mb-0">{{ rec.item_name }}</h5>
+                                        <span class="badge bg-{{ 'danger' if rec.days_until_empty <= 3 else 'warning' if rec.days_until_empty <= 7 else 'info' }}">
+                                            {{ rec.days_until_empty }}日
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        <small class="text-muted">カテゴリ</small>
+                                        <p class="mb-0">
+                                            <span class="badge bg-secondary">{{ rec.category }}</span>
+                                        </p>
+                                    </div>
+                                    <div class="mb-2">
+                                        <small class="text-muted">現在在庫</small>
+                                        <p class="mb-0"><strong>{{ "%.1f"|format(rec.current_quantity) }} 個</strong></p>
+                                    </div>
+                                    <div class="mb-2">
+                                        <small class="text-muted">消費速度</small>
+                                        <p class="mb-0">{{ "%.2f"|format(rec.consumption_per_day) }} 個/日</p>
+                                    </div>
+                                    <div class="mb-2">
+                                        <small class="text-muted">消耗予定日</small>
+                                        <p class="mb-0">{{ rec.depletion_date.strftime('%m月%d日 (%a)') }}</p>
+                                    </div>
+                                    <hr>
+                                    <div class="alert alert-{{ 'danger' if rec.days_until_empty <= 0 else 'warning' if rec.days_until_empty <= 3 else 'info' }} mb-0">
+                                        <strong>購入推奨:</strong>
+                                        <p class="mb-0">{{ rec.recommend_purchase_by.strftime('%m月%d日') }}</p>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-light">
+                                    <small class="text-muted">
+                                        信頼度: {{ "{:.0f}".format(rec.confidence * 100) }}%
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- 表示 -->
+            <div id="tableView" style="display:none;">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>品目名</th>
+                                <th>カテゴリ</th>
+                                <th>現在庫</th>
+                                <th>消費速度</th>
+                                <th>消耗予定</th>
+                                <th>購入推奨日</th>
+                                <th>信頼度</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rec in recommendations %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ rec.item_name }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ rec.category }}</span>
+                                    </td>
+                                    <td>{{ "%.1f"|format(rec.current_quantity) }}</td>
+                                    <td>{{ "%.2f"|format(rec.consumption_per_day) }}/日</td>
+                                    <td>{{ rec.depletion_date.strftime('%m-%d') }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if rec.days_until_empty <= 0 else 'warning' if rec.days_until_empty <= 3 else 'info' }}">
+                                            {{ rec.recommend_purchase_by.strftime('%m-%d') }}
+                                        </span>
+                                    </td>
+                                    <td>{{ "{:.0f}".format(rec.confidence * 100) }}%</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 凡例 -->
+            <div class="row mt-5">
+                <div class="col-md-12">
+                    <h4 class="mb-3">凡例</h4>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="alert alert-danger mb-0">
+                                <strong>危機的:</strong> 消耗予定まで0〜3日
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="alert alert-warning mb-0">
+                                <strong>注意:</strong> 消耗予定まで4〜7日
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="alert alert-info mb-0">
+                                <strong>準備:</strong> 消耗予定まで8日以上
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 推奨アルゴリズム説明 -->
+            <div class="mt-4">
+                <h4 class="mb-3">推奨アルゴリズム</h4>
+                <div class="card">
+                    <div class="card-body">
+                        <p>本アプリの購入提案は以下のアルゴリズムで計算されます:</p>
+                        <ol>
+                            <li><strong>消費速度を計算:</strong> 過去の消費ログから平均消費速度を計算</li>
+                            <li><strong>消耗予定日を算出:</strong> 現在在庫 ÷ 消費速度 で消耗日数を計算</li>
+                            <li><strong>購入推奨日を決定:</strong> 消耗予定日から3日前を購入推奨日として提案</li>
+                            <li><strong>信頼度を評価:</strong> 計算に使用したログ件数により信頼度を設定</li>
+                        </ol>
+                        <div class="bg-light p-3 rounded mt-3">
+                            <p class="mb-1"><strong>信頼度について:</strong></p>
+                            <ul class="mb-0">
+                                <li><strong>80%以上:</strong> 十分な消費ログがある（信頼性高）</li>
+                                <li><strong>30〜79%:</strong> カテゴリ平均値を使用（中程度）</li>
+                                <li><strong>10%以下:</strong> ログが不足している（参考値）</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        {% else %}
+            <div class="alert alert-info" role="alert">
+                <i class="bi bi-info-circle"></i> 現在、購入提案がありません。
+                消費を記録して予測精度を上げてください。
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="bi bi-camera"></i> ステップ1: レシート処理
+                            </h5>
+                            <p class="card-text">レシート画像から品目を抽出し、在庫に追加します。</p>
+                            <a href="{{ url_for('receipt') }}" class="btn btn-primary btn-sm">開始</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="bi bi-pencil-square"></i> ステップ2: 消費記録
+                            </h5>
+                            <p class="card-text">実際の消費量を記録します。</p>
+                            <a href="{{ url_for('consume') }}" class="btn btn-success btn-sm">開始</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="bi bi-cart-check"></i> ステップ3: 提案表示
+                            </h5>
+                            <p class="card-text">十分なデータから提案が生成されます。</p>
+                            <button class="btn btn-warning btn-sm" disabled>準備中</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('input[name="viewType"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (this.value === 'card') {
+            document.getElementById('cardView').style.display = 'block';
+            document.getElementById('tableView').style.display = 'none';
+        } else {
+            document.getElementById('cardView').style.display = 'none';
+            document.getElementById('tableView').style.display = 'block';
+        }
+    });
+});
+</script>
+{% endblock %}

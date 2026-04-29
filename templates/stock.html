@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}在庫確認 - OUCHI-EXPENSES{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-box-seam"></i> 在庫確認
+        </h2>
+
+        {% if stocks_by_category %}
+            <!-- タブナビゲーション -->
+            <ul class="nav nav-tabs mb-4" id="categoryTabs" role="tablist">
+                {% for category in stocks_by_category.keys() %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if loop.first %}active{% endif %}" 
+                                id="tab-{{ loop.index0 }}" data-bs-toggle="tab" 
+                                data-bs-target="#content-{{ loop.index0 }}" type="button" role="tab">
+                            {{ category }}
+                            <span class="badge bg-secondary ms-1">{{ stocks_by_category[category]|length }}</span>
+                        </button>
+                    </li>
+                {% endfor %}
+            </ul>
+
+            <!-- タブコンテンツ -->
+            <div class="tab-content" id="categoryContent">
+                {% for category, stocks in stocks_by_category.items() %}
+                    <div class="tab-pane fade {% if loop.first %}show active{% endif %}" 
+                         id="content-{{ loop.index0 }}" role="tabpanel">
+                        <div class="row">
+                            {% for stock in stocks %}
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="card h-100 stock-card">
+                                        <div class="card-header bg-light">
+                                            <h5 class="card-title mb-0">{{ stock.item_name }}</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <strong>在庫数:</strong>
+                                                <h3 class="text-primary">
+                                                    {{ "%.1f"|format(stock.quantity) }}
+                                                    <small class="text-muted fs-6">{{ stock.unit }}</small>
+                                                </h3>
+                                            </div>
+                                            <div class="mb-2">
+                                                <strong>カテゴリ:</strong>
+                                                <span class="badge bg-info">{{ stock.category or 'その他' }}</span>
+                                            </div>
+                                            <div class="mb-2">
+                                                <strong>最終更新:</strong>
+                                                <small class="text-muted">
+                                                    {{ stock.last_updated.strftime('%m-%d %H:%M') }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <div class="card-footer bg-light">
+                                            <button class="btn btn-sm btn-outline-primary w-100 stock-detail-btn" 
+                                                    data-item="{{ stock.item_name }}"
+                                                    data-bs-toggle="modal" data-bs-target="#stockModal">
+                                                <i class="bi bi-info-circle"></i> 詳細
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle"></i> 在庫がありません。まずレシートを処理してください。
+            </div>
+
+            <a href="{{ url_for('receipt') }}" class="btn btn-primary btn-lg">
+                <i class="bi bi-camera"></i> レシートを追加
+            </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 在庫詳細モーダル -->
+<div class="modal fade" id="stockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">在庫詳細</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">読み込み中...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.stock-detail-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        const itemName = this.getAttribute('data-item');
+        document.getElementById('modalTitle').textContent = itemName + ' - 詳細';
+        
+        try {
+            const response = await fetch(`/api/stock/${encodeURIComponent(itemName)}`);
+            const data = await response.json();
+            
+            let html = `
+                <div class="mb-3">
+                    <strong>在庫数:</strong>
+                    <h4 class="text-primary">${data.quantity.toFixed(1)} ${data.unit}</h4>
+                </div>
+                <div class="mb-3">
+                    <strong>カテゴリ:</strong>
+                    <span class="badge bg-info">${data.category || 'その他'}</span>
+                </div>
+                <div class="mb-3">
+                    <strong>最終更新:</strong>
+                    <p>${new Date(data.last_updated).toLocaleString('ja-JP')}</p>
+                </div>
+            `;
+            
+            if (data.prediction) {
+                html += `
+                    <hr>
+                    <h6>消耗予測</h6>
+                    <div class="mb-2">
+                        <strong>消費速度:</strong>
+                        ${data.prediction.consumption_per_day?.toFixed(2) || 'N/A'} 個/日
+                    </div>
+                    <div class="mb-2">
+                        <strong>消耗予定日:</strong>
+                        ${data.prediction.depletion_date ? new Date(data.prediction.depletion_date).toLocaleDateString('ja-JP') : 'N/A'}
+                    </div>
+                `;
+            }
+            
+            document.getElementById('modalBody').innerHTML = html;
+        } catch (error) {
+            document.getElementById('modalBody').innerHTML = `<div class="alert alert-danger">詳細情報の取得に失敗しました</div>`;
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}ホーム - OUCHI-EXPENSES{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="display-4 mb-3">
+            <i class="bi bi-receipt"></i> OUCHI-EXPENSES
+        </h1>
+        <p class="lead text-muted">夫婦で使う家計簿アプリ</p>
+    </div>
+</div>
+
+<!-- 統計情報 -->
+<div class="row mb-5">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-primary text-white h-100">
+            <div class="card-body">
+                <h6 class="card-title text-uppercase fw-bold">レシート処理数</h6>
+                <h3 class="card-text">{{ summary.total_receipts }}</h3>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-success text-white h-100">
+            <div class="card-body">
+                <h6 class="card-title text-uppercase fw-bold">登録品目数</h6>
+                <h3 class="card-text">{{ summary.unique_items }}</h3>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-info text-white h-100">
+            <div class="card-body">
+                <h6 class="card-title text-uppercase fw-bold">合計支出</h6>
+                <h3 class="card-text">¥{{ "{:,.0f}".format(summary.total_spent) }}</h3>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-warning text-white h-100">
+            <div class="card-body">
+                <h6 class="card-title text-uppercase fw-bold">記録品目数</h6>
+                <h3 class="card-text">{{ summary.total_items_recorded }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 購入提案セクション -->
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-cart-check"></i> 近日中の購入提案
+        </h2>
+        
+        {% if recommendations %}
+            <div class="row">
+                {% for rec in recommendations %}
+                    <div class="col-md-4 col-sm-6 mb-3">
+                        <div class="card border-left-danger h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ rec.item_name }}</h5>
+                                <p class="card-text">
+                                    <small class="text-muted">
+                                        <span class="badge bg-secondary">{{ rec.category }}</span>
+                                    </small>
+                                </p>
+                                <p class="card-text">
+                                    <strong>購入推奨:</strong> 
+                                    {{ rec.recommend_purchase_by.strftime('%m月%d日') }}
+                                </p>
+                                <p class="card-text">
+                                    <strong>残在庫:</strong> {{ "%.1f"|format(rec.current_quantity) }}
+                                </p>
+                                <small class="text-muted">
+                                    信頼度: {{ "{:.0f}".format(rec.confidence * 100) }}%
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info" role="alert">
+                <i class="bi bi-info-circle"></i> 現在、購入提案はありません
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 快速アクションボタン -->
+<div class="row mt-5">
+    <div class="col-md-12">
+        <h3 class="mb-3">クイックアクション</h3>
+        <div class="d-grid gap-2 d-sm-flex flex-wrap">
+            <a href="{{ url_for('receipt') }}" class="btn btn-primary btn-lg">
+                <i class="bi bi-camera"></i> レシートを追加
+            </a>
+            <a href="{{ url_for('consume') }}" class="btn btn-success btn-lg">
+                <i class="bi bi-pencil-square"></i> 消費を記録
+            </a>
+            <a href="{{ url_for('stock') }}" class="btn btn-info btn-lg">
+                <i class="bi bi-box-seam"></i> 在庫を確認
+            </a>
+            <a href="{{ url_for('recommend') }}" class="btn btn-warning btn-lg">
+                <i class="bi bi-cart-check"></i> 購入提案
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
