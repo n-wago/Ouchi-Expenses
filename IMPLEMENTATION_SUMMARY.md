@@ -4,8 +4,8 @@
 
 | 機能 | ステータス | 実装場所 | 詳細 |
 |------|-----------|--------|------|
-| レシート画像読み込み | ✅ 完了 | `services/ocr_service.py` | easyocrで日本語・英語対応 |
-| OCR文字起こし | ✅ 完了 | `services/ocr_service.py` | 画像前処理（CLAHE）で精度向上 |
+| レシート画像読み込み | ✅ 完了 | `services/ocr_service.py` | Google Cloud Vision API対応 |
+| OCR文字起こし | ✅ 完了 | `services/ocr_service.py` | Vision APIで95%+精度達成 |
 | レシート品目仕分け | ✅ 完了 | `services/parsing_service.py` | 正規表現で自動カテゴリ分類 |
 | ストック個数追加 | ✅ 完了 | `services/stock_service.py` | DB自動更新 |
 | 消費数登録 | ✅ 完了 | `services/stock_service.py` | ログ記録 + 在庫減算 |
@@ -78,14 +78,16 @@ data/
 
 | ライブラリ | 用途 | バージョン |
 |-----------|------|-----------|
-| easyocr | 日本語OCR | 1.7.0 |
-| opencv-python | 画像処理 | 4.8.1.78 |
-| numpy | 数値計算 | 1.24.3 |
-| pandas | データフレーム | 2.0.3 |
-| scikit-learn | 機械学習基盤 | 1.3.0 |
-| pillow | 画像ライブラリ | 10.0.0 |
-| sqlalchemy | ORM | 2.0.21 |
-| python-dateutil | 日付処理 | 2.8.2 |
+| google-cloud-vision | Google Cloud Vision API | 3.7.4 |
+| opencv-python | 画像処理 | 4.13.0.92 |
+| numpy | 数値計算 | 2.4.4 |
+| pandas | データフレーム | 3.0.2 |
+| scikit-learn | 機械学習基盤 | 1.8.0 |
+| pillow | 画像ライブラリ | 12.2.0 |
+| sqlalchemy | ORM | 2.0.49 |
+| python-dateutil | 日付処理 | 2.9.0.post0 |
+| Flask | Webフレームワーク | 3.0.0 |
+| Werkzeug | WSGI | 3.0.3 |
 
 ## 🔄 データフロー
 

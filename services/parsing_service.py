@@ -118,3 +118,4 @@ class ParsingService:
 def get_parsing_service():
     """パーシングサービスのインスタンスを取得"""
     return ParsingService()
+

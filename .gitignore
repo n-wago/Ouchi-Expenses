@@ -42,6 +42,10 @@ data/
 .env
 .env.local
 
+# GCP Credentials (sensitive data)
+config/google-cloud-key.json
+config/*.json
+
 # easyocr models (large files, cached)
 .easyocr/
 
